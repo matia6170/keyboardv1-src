@@ -1,21 +1,22 @@
 #include <Arduino.h>
+#include "KeyMatrix.h"
 
-// put function declarations here:
-int myFunction(int, int);
+#define ROWS 4
+#define COLS 3
+
+const int rowPins[ROWS] = {3, 4, 6, 40};
+const int colPins[COLS] = {5, 39, 14};
+
+KeyMatrix<ROWS,COLS> Keypad(rowPins, colPins);
 
 void setup() {
   // put your setup code here, to run once:
-  int result = myFunction(2, 3);
   Serial.begin(115200);
+  Keypad.init();
+
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  Serial.println("Hello, World!");
-  delay(1000);
+  Keypad.scan_keys();
 }
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
-}
+~
