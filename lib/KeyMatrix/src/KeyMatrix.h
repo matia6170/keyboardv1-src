@@ -14,11 +14,15 @@ class KeyMatrix {
     int _rowPins[ROWS];
     int _colPins[COLS];
     bool _lastKeyState[ROWS][COLS];
+    // bool _lastKeyState[ROWS][COLS];
+
+    void (*_key_evt_callback)(int row, int col, bool down);
 
    public:
     KeyMatrix(const int (&rowPins)[ROWS], const int (&colPins)[COLS]);
     void init();
     void scan_keys();
+    void register_callback(void (*key_evt_callback)(int row, int col, bool down));
 };
 
 template <size_t ROWS, size_t COLS>
@@ -62,15 +66,15 @@ void KeyMatrix<ROWS, COLS>::scan_keys() {
             if (currentKey == HIGH && _lastKeyState[r][c] == false) {
                 // Serial.print("Key DOWN: ");
                 // Serial.println(keyMap[r][c]);
-                Serial.printf("(%d, %d) DOWN\n", c, r);
+                _key_evt_callback(r,c,true);
+                // Serial.printf("(%d, %d) DOWN\n", c, r);
                 // Update the state
                 _lastKeyState[r][c] = true;
             }
             // Key up
             else if (currentKey == LOW && _lastKeyState[r][c] == true) {
-                // Serial.print("Key UP:   ");
-                // Serial.println(keyMap[r][c]);
-                Serial.printf("(%d, %d) UP\n", c, r);
+                _key_evt_callback(r,c,false);
+                // Serial.printf("(%d, %d) UP\n", c, r);
                 // Update the state
                 _lastKeyState[r][c] = false;
             }
@@ -79,6 +83,11 @@ void KeyMatrix<ROWS, COLS>::scan_keys() {
         // set current col to 0
         digitalWrite(_colPins[c], LOW);
     }
+}
+
+template <size_t ROWS, size_t COLS>
+void KeyMatrix<ROWS, COLS>::register_callback(void (*key_evt_callback)(int row, int col, bool down)) {
+    _key_evt_callback = key_evt_callback;
 }
 
 #endif
