@@ -1,6 +1,23 @@
-#include "KeyCode.h"
+#ifndef CONFIG_H
+#define CONFIG_H
 
+#include <Arduino.h>
+#include "USBHIDKeyboard.h" // Pulls in standard definitions like KEY_LEFT_CTRL, KEY_ESC, etc.
 #include "class/hid/hid.h"
+
+#define DEBUG
+
+/*
+* Keyboard Matrix Configuration and Key Mapping
+*/
+
+// --- Layout Matrix Size ---
+#define ROWS 6
+#define COLS 14
+
+// Matrix array accessible in main code execution
+extern uint8_t keyMap[ROWS][COLS];
+
 
 // ESP32-S3 Pin definitions traced from schematic
 const int rowPins[ROWS] = {
@@ -73,4 +90,42 @@ uint8_t keyMap[ROWS][COLS] = {
     HID_KEY_ARROW_DOWN, HID_KEY_ARROW_RIGHT, HID_KEY_2, HID_KEY_HOME, 
     HID_KEY_PAGE_UP, HID_KEY_DELETE 
   }
-};//
+};
+
+/*
+* Other Peripheral Configurations (OLED, RTC, Encoder) and Global Variables
+*/
+
+
+//encoder
+  #define ENCODER_INA 47
+  #define ENCODER_INB 48
+  #define ENCODER_BTN 2
+  const char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+//oled
+  #define SCREEN_WIDTH 128
+  #define SCREEN_HEIGHT 64
+
+  // Define your custom I2C pins
+  #define I2C_SDA 42
+  #define I2C_SCL 41
+
+  // For I2C, standard breakouts usually live at address 0x3C
+  #define OLED_RESET    -1 // -1 means sharing the microcontroller reset pin
+  #define SCREEN_ADDRESS 0x3C
+
+//rtc
+  //#define DS1307_ADDRESS 0x68 // I2C address for DS1307 RTC (not used directly since RTClib handles it)
+
+// Heartbeat LED pin
+  #define LED_PIN 1
+
+
+/*
+Scanning for I2C devices...
+-> Found device at address 0x3C (Likely SSD1306/SH1106 OLED Display)
+-> Found device at address 0x57
+-> Found device at address 0x68
+*/
+#endif // CONFIG_H

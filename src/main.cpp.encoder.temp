@@ -1,0 +1,54 @@
+#include <Arduino.h>
+#include <ESP32Encoder.h>
+
+// Define pins for Encoder Phase A and Phase B
+#define ENCODER_INA 47
+#define ENCODER_INB 48
+#define ENCODER_BTN 2
+
+ESP32Encoder encoder;
+long lastPosition = 0;
+
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(ENCODER_BTN, INPUT_PULLUP);
+
+  // Optional: Enable internal weak pull-ups if your encoder board 
+  // doesn't have physical resistors built into the PCB
+//   ESP32Encoder::useInternalWeakPullResistors = puType::UP;
+
+  // Attach the pins to the hardware pulse counter peripheral
+  encoder.attachHalfQuad(ENCODER_INA, ENCODER_INB);
+
+  // Mechanical encoders often need a stronger PCNT glitch filter than the library default.
+  encoder.setFilter(1023);
+  
+  // Clear the starting count position to 0
+  encoder.setCount(5);
+
+  Serial.println("Hardware Encoder Initialized.");
+}
+
+void loop() {
+  // Read the current position directly from the hardware registers
+  long currentPosition = encoder.getCount();
+
+  // Only print if the value has actually changed
+  if (currentPosition != lastPosition) {
+    Serial.printf("Encoder Position: %ld\n", currentPosition);
+    lastPosition = currentPosition;
+  }
+
+    // Check if the encoder button is pressed
+    if (digitalRead(ENCODER_BTN) == LOW) {
+        Serial.println("Encoder Button Pressed!");
+        // Debounce delay
+        // delay(200);
+    }
+
+  // No delay needed to prevent missed steps because the hardware 
+  // PCNT peripheral handles the counting independently of the CPU loop!
+  delay(10); 
+}
