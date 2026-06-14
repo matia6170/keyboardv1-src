@@ -121,6 +121,15 @@ uint8_t keyMap[ROWS][COLS] = {
 // Heartbeat LED pin
   #define LED_PIN 1
 
+// button
+  #define BOOT_BTN_PIN 0
+  #define CONTROL_BTN_PIN 40
+  //SW87 = 3.3v 0kohm
+  //SW89 = 1.65v 10kohm
+
+// Beeper pin
+  #define BEEPER_PIN 39
+
 
 /*
 Scanning for I2C devices...

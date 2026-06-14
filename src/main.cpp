@@ -21,6 +21,7 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 RTC_DS3231 rtc;
+SemaphoreHandle_t i2cMutex = nullptr;
 
 KeyMatrix<ROWS, COLS> Keypad(rowPins, colPins);
 ESP32Encoder encoder;
@@ -34,14 +35,16 @@ USBHIDKeyboard Keyboard;
 
 bool blue;
 void key_evt_callback(int row, int col, bool down, uint8_t key) { 
+#ifdef DEBUG
   Serial.printf("Callback: %c (%d, %d) %s\n", key, col, row, down ? "DOWN" : "UP");
+#endif
   if (down){
-    Keyboard.pressRaw(key);
-    digitalWrite(LED_PIN, HIGH);
+    // Keyboard.pressRaw(key);
+    // digitalWrite(LED_PIN, HIGH);
   }
   else{
-    Keyboard.releaseRaw(key);
-    digitalWrite(LED_PIN, LOW);
+    // Keyboard.releaseRaw(key);
+    // digitalWrite(LED_PIN, LOW);
   }
 
   // blue = down;
@@ -51,6 +54,18 @@ void key_evt_callback(int row, int col, bool down, uint8_t key) {
 void init_io(){
     pinMode(LED_PIN, OUTPUT); 
     pinMode(ENCODER_BTN, INPUT_PULLUP);
+    pinMode(BOOT_BTN_PIN, INPUT_PULLUP);
+    pinMode(CONTROL_BTN_PIN, INPUT_PULLUP);
+    pinMode(BEEPER_PIN, OUTPUT);
+
+  i2cMutex = xSemaphoreCreateMutex();
+  if (i2cMutex == nullptr) {
+    Serial.println("Failed to create I2C mutex.");
+    while (true) delay(10);
+  }
+
+  //demo test take of mutex and never give it back to test blocking behavior of tasks that need to access i2c
+//   xSemaphoreTake(i2cMutex, portMAX_DELAY);
 
     // Init Wire
     Wire.begin(I2C_SDA, I2C_SCL);
@@ -125,10 +140,12 @@ void init_peripherals(){
 
 }
 void init_tasks(){
-  task_params params(&Keypad, &encoder, &rtc, &display);
+  static task_params params(&Keypad, &encoder, &rtc, &display, &i2cMutex);
   xTaskCreate(heartbeat_task, "heartbeat", 1024, &params, 1, NULL);
+  xTaskCreate(fetch_time_from_rtc_task, "fetch_time", 4096, &params, 1, NULL);
   xTaskCreate(keyboard_task, "keyboard", 4096, &params, 1, NULL);
-  xTaskCreate(display_task, "display", 4096, &params, 1, NULL);
+  xTaskCreate(display_task, "display", 8192, &params, 1, NULL);
+//   xTaskCreate(io_task, "analog_btn", 4096, &params, 1, NULL);
 }
 
 void setup() {

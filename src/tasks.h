@@ -9,32 +9,74 @@
 #include "interrupts.h"
 #include "ESP32Encoder.h"
 #include <RTClib.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 int encoderValue = 0;                       // Move 10 pixels per frame
-DateTime now2;
+DateTime now;
+portMUX_TYPE nowMux = portMUX_INITIALIZER_UNLOCKED;
+
 
 struct task_params {
     KeyMatrix<ROWS, COLS> *keypad;
     ESP32Encoder *encoder;
     RTC_DS3231 *rtc;
     Adafruit_SSD1306 *display;
-    task_params(KeyMatrix<ROWS, COLS> *kp, ESP32Encoder *enc, RTC_DS3231 *rt, Adafruit_SSD1306 *disp) : keypad(kp), encoder(enc), rtc(rt), display(disp) {}
+    SemaphoreHandle_t *i2cMutex;
+    task_params(KeyMatrix<ROWS, COLS> *kp, ESP32Encoder *enc, RTC_DS3231 *rt, Adafruit_SSD1306 *disp, SemaphoreHandle_t *mutex) : keypad(kp), encoder(enc), rtc(rt), display(disp), i2cMutex(mutex) {}
 };
 
-void heartbeat_task(void *pvParameters) {
+void fetch_time_from_rtc_task(void *pvParameters) {
     task_params *params = (task_params *)pvParameters;
     RTC_DS3231 *rtc = params->rtc;
+
+    while (true) {
+        DateTime temp;
+
+        if (xSemaphoreTake(*(params->i2cMutex), portMAX_DELAY) == pdTRUE) {
+            temp = rtc->now();
+            xSemaphoreGive(*(params->i2cMutex));
+        }
+
+        //write protect
+        //display task will now read 'now' after being fully written by this task. after unblock.
+        portENTER_CRITICAL(&nowMux);
+        now = temp;
+        portEXIT_CRITICAL(&nowMux);
+
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Update every second
+    }
+}
+
+void heartbeat_task(void *pvParameters) {
 #ifdef DEBUG
     Serial.println("Heartbeat task started.");
 #endif
 
   while (true) {
-    // now2 = rtc->now();
     digitalWrite(LED_PIN, HIGH);
     vTaskDelay(pdMS_TO_TICKS(500)); // delay 1 second
     digitalWrite(LED_PIN, LOW);
     vTaskDelay(pdMS_TO_TICKS(500)); // delay 1 second
   }
+}
+
+void io_task(void *pvParameters) {
+    task_params *params = (task_params *)pvParameters;
+#ifdef DEBUG
+    Serial.println("IO task started.");
+#endif  
+
+    while(true){
+        // Example: Read digital button value and print it
+        int buttonValue = digitalRead(BOOT_BTN_PIN);
+        // Serial.printf("Boot Button Value: %d\n", buttonValue);
+
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Adjust the delay as needed
+
+    }
+
+
 }
 
 
@@ -56,6 +98,7 @@ void keyboard_task(void *pvParameters) {
             if (count != lastCount) {
                 lastCount = count;
                 // update display here
+                tone(BEEPER_PIN, 1000, 50); // Beep at 1kHz for 50ms
                 encoderValue = count; // Example: Change speed based on encoder count
                 Serial.printf("Encoder count: %ld\n", count);
             }
@@ -73,7 +116,10 @@ void display_task(void *pvParameters) {
 #endif
     display->clearDisplay();
     display->drawBitmap(0, 0, logo_bmp, 128, 64, WHITE);
-    display->display();
+    if (xSemaphoreTake(*(params->i2cMutex), portMAX_DELAY) == pdTRUE) {
+        display->display();
+        xSemaphoreGive(*(params->i2cMutex));
+    }
     vTaskDelay(pdMS_TO_TICKS(2000)); // show logo
 
     // int counter = 0;
@@ -114,11 +160,15 @@ void display_task(void *pvParameters) {
         display->setCursor(0,0);
 
   // Print the date and time parameters
-        DateTime now = params->rtc->now();
+        DateTime currentTime;
+        //read protect
+        portENTER_CRITICAL(&nowMux);
+        currentTime = now;
+        portEXIT_CRITICAL(&nowMux);        
         display->printf("%04d/%02d/%02d (%s) %02d:%02d:%02d\n", 
-                now.year(), now.month(), now.day(), 
-                daysOfTheWeek[now.dayOfTheWeek()],
-                now.hour(), now.minute(), now.second());
+                currentTime.year(), currentTime.month(), currentTime.day(), 
+                daysOfTheWeek[currentTime.dayOfTheWeek()],
+                currentTime.hour(), currentTime.minute(), currentTime.second());
         display->setCursor(0,50);
         display->printf("Speed: %d", abs(encoderValue));
 
@@ -126,7 +176,10 @@ void display_task(void *pvParameters) {
         display->fillRect(xPos, yPos, boxSize, boxSize, WHITE);
 
         // 3. Push the buffer to the OLED via I2C
-        display->display();
+        if (xSemaphoreTake(*(params->i2cMutex), portMAX_DELAY) == pdTRUE) {
+            display->display();
+            xSemaphoreGive(*(params->i2cMutex));
+        }
 
         // 4. Calculate the next position
         xPos += xVelocity;
